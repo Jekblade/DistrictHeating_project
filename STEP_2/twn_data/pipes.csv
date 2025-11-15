@@ -1,6 +1,6 @@
 id,from_node,to_node,length
 0,forks-6,consumers-0,295.9
-1,forks-6,producers-1,804.8
+1,producers-1,forks-6,804.8
 2,producers-1,forks-0,366.63
 3,forks-6,forks-0,527.23
 4,forks-6,consumers-1,1488.15
@@ -26,3 +26,4 @@ id,from_node,to_node,length
 24,forks-3,producers-3,1029.71
 25,producers-3,forks-1,556.77
 26,forks-1,consumers-8,1737.41
+27,forks-5,consumers-1,1144
