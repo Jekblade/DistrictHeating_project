@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riga Supermarket Heat Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f9fafb;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .map-header {
+            position: absolute;
+            top: 16px;
+            left: 60px;
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-width: 300px;
+        }
+        
+        .map-header h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+        
+        .map-header p {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 12px;
+        }
+        
+        .btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+            width: 100%;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+        
+        .btn-polygon {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-polygon:hover {
+            background: #2563eb;
+        }
+        
+        .btn-polygon.active {
+            background: #1d4ed8;
+        }
+        
+        .btn-clear {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-clear:hover {
+            background: #dc2626;
+        }
+        
+        .btn-export {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-export:hover {
+            background: #059669;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .stats-panel {
+            width: 320px;
+            background: white;
+            box-shadow: -4px 0 6px rgba(0,0,0,0.1);
+            padding: 24px;
+            overflow-y: auto;
+        }
+        
+        .stats-panel h3 {
+            font-size: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .stat-card.blue {
+            background: #eff6ff;
+        }
+        
+        .stat-card.orange {
+            background: #fff7ed;
+        }
+        
+        .stat-card.green {
+            background: #f0fdf4;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 4px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        
+        .stat-value.blue { color: #2563eb; }
+        .stat-value.orange { color: #ea580c; }
+        .stat-value.green { color: #16a34a; }
+        
+        .stat-unit {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        
+        .market-list {
+            border-top: 1px solid #e5e7eb;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+        
+        .market-list h4 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .market-item {
+            padding: 8px;
+            background: #f9fafb;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .market-name {
+            font-weight: 500;
+        }
+        
+        .market-brand {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        .scrollable-list {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            font-size: 20px;
+        }
+        
+        .info-text {
+            font-size: 12px;
+            color: #6b7280;
+            font-style: italic;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="map-container">
+        <div class="map-header">
+            <h2>Riga Supermarkets</h2>
+            <p>Click points to create a polygon selection area</p>
+            <button class="btn btn-polygon" id="polygonBtn" onclick="togglePolygonMode()">
+                ✏️ Start Drawing Polygon
+            </button>
+            <button class="btn btn-clear" onclick="clearSelection()">
+                🗑️ Clear Selection
+            </button>
+            <button class="btn btn-export" onclick="exportWasteHeatCSV()" id="exportBtn" disabled>
+                📊 Export Waste Heat CSV
+            </button>
+            <div class="info-text" id="infoText">Draw a polygon by clicking points on the map</div>
+        </div>
+        <div id="map"></div>
+        <div class="loading-overlay" id="loading">
+            <div>Loading supermarkets...</div>
+        </div>
+    </div>
+    
+    <div class="stats-panel">
+        <h3>Area Statistics</h3>
+        
+        <div class="stat-card blue">
+            <div class="stat-label">Supermarkets in Area</div>
+            <div class="stat-value blue" id="selectedCount">0</div>
+        </div>
+        
+        <div class="stat-card orange">
+            <div class="stat-label">Total Waste Heat</div>
+            <div class="stat-value orange" id="totalHeat">0</div>
+            <div class="stat-unit">MWh/year</div>
+        </div>
+        
+        <div class="stat-card green">
+            <div class="stat-label">Heat per Supermarket</div>
+            <div class="stat-value green">2,000</div>
+            <div class="stat-unit">MWh/year</div>
+        </div>
+        
+        <div class="market-list">
+            <h4>📍 Selected Supermarkets</h4>
+            <div class="scrollable-list" id="selectedList">
+                <div style="color: #6b7280; font-size: 14px;">Draw a polygon to select supermarkets</div>
+            </div>
+        </div>
+        
+        <div class="market-list">
+            <h4 style="color: #9ca3af;">📍 Excluded Supermarkets</h4>
+            <div id="excludedCount" style="font-size: 14px; color: #6b7280;">0 outside selection</div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let supermarkets = [];
+        let markers = [];
+        let polygonMode = false;
+        let polygonPoints = [];
+        let currentPolygon = null;
+        let tempLine = null;
+        let tempMarkers = [];
+        
+        // Initialize map centered on Riga
+        function initMap() {
+            map = L.map('map').setView([56.9496, 24.1052], 12);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+            
+            map.on('click', onMapClick);
+        }
+        
+        async function fetchSupermarkets() {
+            try {
+                // Riga bounds (both sides of river)
+                const query = `
+                    [out:json][timeout:25];
+                    (
+                        node["shop"="supermarket"](56.90,24.00,57.00,24.20);
+                        way["shop"="supermarket"](56.90,24.00,57.00,24.20);
+                        relation["shop"="supermarket"](56.90,24.00,57.00,24.20);
+                    );
+                    out center;
+                `;
+                
+                const response = await fetch('https://overpass-api.de/api/interpreter', {
+                    method: 'POST',
+                    body: query
+                });
+                
+                const data = await response.json();
+                
+                supermarkets = data.elements.map(el => ({
+                    id: el.id,
+                    name: el.tags?.name || 'Unknown Supermarket',
+                    brand: el.tags?.brand || el.tags?.name || 'Unknown',
+                    lat: el.lat || el.center?.lat,
+                    lon: el.lon || el.center?.lon,
+                    selected: false
+                })).filter(m => m.lat && m.lon);
+                
+                // Add markers to map
+                supermarkets.forEach(market => {
+                    const marker = L.circleMarker([market.lat, market.lon], {
+                        radius: 6,
+                        fillColor: '#9ca3af',
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(map);
+                    
+                    marker.bindPopup(`<b>${market.name}</b><br>${market.brand !== market.name ? market.brand : ''}`);
+                    marker.supermarketId = market.id;
+                    markers.push(marker);
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                updateStats();
+            } catch (error) {
+                console.error('Error fetching supermarkets:', error);
+                document.getElementById('loading').innerHTML = '<div>Error loading supermarkets. Please refresh.</div>';
+            }
+        }
+        
+        function togglePolygonMode() {
+            polygonMode = !polygonMode;
+            const btn = document.getElementById('polygonBtn');
+            const infoText = document.getElementById('infoText');
+            
+            if (polygonMode) {
+                btn.textContent = '✓ Finish Polygon';
+                btn.classList.add('active');
+                infoText.textContent = 'Click to add points. Click "Finish Polygon" to complete.';
+                map.getContainer().style.cursor = 'crosshair';
+            } else {
+                btn.textContent = '✏️ Start Drawing Polygon';
+                btn.classList.remove('active');
+                infoText.textContent = 'Draw a polygon by clicking points on the map';
+                map.getContainer().style.cursor = '';
+                
+                if (polygonPoints.length >= 3) {
+                    finishPolygon();
+                } else {
+                    cancelPolygon();
+                }
+            }
+        }
+        
+        function onMapClick(e) {
+            if (!polygonMode) return;
+            
+            polygonPoints.push([e.latlng.lat, e.latlng.lng]);
+            
+            // Add temporary marker
+            const marker = L.circleMarker([e.latlng.lat, e.latlng.lng], {
+                radius: 4,
+                fillColor: '#3b82f6',
+                color: '#fff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 1
+            }).addTo(map);
+            tempMarkers.push(marker);
+            
+            // Draw line between points
+            if (tempLine) {
+                map.removeLayer(tempLine);
+            }
+            
+            if (polygonPoints.length > 1) {
+                tempLine = L.polyline(polygonPoints, {
+                    color: '#3b82f6',
+                    weight: 2,
+                    dashArray: '5, 5'
+                }).addTo(map);
+            }
+        }
+        
+        function finishPolygon() {
+            if (polygonPoints.length < 3) {
+                cancelPolygon();
+                return;
+            }
+            
+            // Remove temporary elements
+            tempMarkers.forEach(m => map.removeLayer(m));
+            tempMarkers = [];
+            if (tempLine) {
+                map.removeLayer(tempLine);
+                tempLine = null;
+            }
+            
+            // Create final polygon
+            if (currentPolygon) {
+                map.removeLayer(currentPolygon);
+            }
+            
+            currentPolygon = L.polygon(polygonPoints, {
+                color: '#3b82f6',
+                weight: 2,
+                fillColor: '#3b82f6',
+                fillOpacity: 0.1
+            }).addTo(map);
+            
+            // Check which supermarkets are inside
+            updateSelection();
+            polygonPoints = [];
+        }
+        
+        function cancelPolygon() {
+            tempMarkers.forEach(m => map.removeLayer(m));
+            tempMarkers = [];
+            if (tempLine) {
+                map.removeLayer(tempLine);
+                tempLine = null;
+            }
+            polygonPoints = [];
+        }
+        
+        function isPointInPolygon(point, polygon) {
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i][1], yi = polygon[i][0];
+                const xj = polygon[j][1], yj = polygon[j][0];
+                
+                const intersect = ((yi > point[0]) !== (yj > point[0]))
+                    && (point[1] < (xj - xi) * (point[0] - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+        
+        function updateSelection() {
+            if (!currentPolygon) {
+                supermarkets.forEach(m => m.selected = false);
+            } else {
+                const polygonCoords = currentPolygon.getLatLngs()[0].map(ll => [ll.lat, ll.lng]);
+                
+                supermarkets.forEach(market => {
+                    market.selected = isPointInPolygon([market.lat, market.lon], polygonCoords);
+                });
+            }
+            
+            // Update marker colors
+            markers.forEach(marker => {
+                const market = supermarkets.find(m => m.id === marker.supermarketId);
+                if (market) {
+                    marker.setStyle({
+                        fillColor: market.selected ? '#3b82f6' : '#9ca3af'
+                    });
+                }
+            });
+            
+            updateStats();
+        }
+        
+        function updateStats() {
+            const selectedCount = supermarkets.filter(m => m.selected).length;
+            const totalHeat = selectedCount * 2000;
+            
+            document.getElementById('selectedCount').textContent = selectedCount;
+            document.getElementById('totalHeat').textContent = totalHeat.toLocaleString();
+            document.getElementById('excludedCount').textContent = 
+                `${supermarkets.filter(m => !m.selected).length} outside selection`;
+            
+            const selectedList = document.getElementById('selectedList');
+            const selected = supermarkets.filter(m => m.selected);
+            
+            if (selected.length === 0) {
+                selectedList.innerHTML = '<div style="color: #6b7280; font-size: 14px;">No supermarkets selected</div>';
+            } else {
+                selectedList.innerHTML = selected.map(m => `
+                    <div class="market-item">
+                        <div class="market-name">${m.name}</div>
+                        ${m.brand !== m.name ? `<div class="market-brand">${m.brand}</div>` : ''}
+                    </div>
+                `).join('');
+            }
+            
+            document.getElementById('exportBtn').disabled = selectedCount === 0;
+        }
+        
+        function clearSelection() {
+            if (currentPolygon) {
+                map.removeLayer(currentPolygon);
+                currentPolygon = null;
+            }
+            
+            cancelPolygon();
+            
+            if (polygonMode) {
+                togglePolygonMode();
+            }
+            
+            supermarkets.forEach(m => m.selected = false);
+            markers.forEach(marker => {
+                marker.setStyle({ fillColor: '#9ca3af' });
+            });
+            
+            updateStats();
+        }
+        
+        function generateHourlyWasteHeat() {
+            const selectedCount = supermarkets.filter(m => m.selected).length;
+            const annualMWh = selectedCount * 2000;
+            const avgHourlyMW = annualMWh / 8760;
+            
+            const data = [];
+            const startDate = new Date('2024-01-01T00:00:00');
+            
+            for (let hour = 0; hour < 8760; hour++) {
+                const date = new Date(startDate.getTime() + hour * 3600000);
+                const dayOfWeek = date.getDay();
+                const hourOfDay = date.getHours();
+                
+                let baseLoad = avgHourlyMW;
+                let variance = 0;
+                
+                // Weekend effect
+                if (dayOfWeek === 0 || dayOfWeek === 6) {
+                    baseLoad *= 0.85;
+                    variance = 0.08;
+                } else {
+                    variance = 0.12;
+                }
+                
+                // Daily pattern
+                if (hourOfDay >= 6 && hourOfDay < 22) {
+                    if (hourOfDay >= 10 && hourOfDay < 19) {
+                        baseLoad *= 1.3;
+                    } else if (hourOfDay >= 8 && hourOfDay < 10 || hourOfDay >= 19 && hourOfDay < 21) {
+                        baseLoad *= 1.15;
+                    } else {
+                        baseLoad *= 1.0;
+                    }
+                } else {
+                    baseLoad *= 0.6;
+                    variance = 0.05;
+                }
+                
+                // Normal distribution
+                const u1 = Math.random();
+                const u2 = Math.random();
+                const normalRandom = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+                const load = Math.max(0, baseLoad * (1 + normalRandom * variance));
+                
+                const timestamp = date.toISOString().replace('T', ' ').substring(0, 19);
+                data.push({
+                    timestamp,
+                    wasteheat_MW: load.toFixed(4)
+                });
+            }
+            
+            return data;
+        }
+        
+        function exportWasteHeatCSV() {
+            const data = generateHourlyWasteHeat();
+            
+            let csv = 'Timestamp,Waste Heat (MW)\n';
+            data.forEach(row => {
+                csv += `${row.timestamp},${row.wasteheat_MW}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            const selectedCount = supermarkets.filter(m => m.selected).length;
+            link.setAttribute('href', url);
+            link.setAttribute('download', `riga_waste_heat_${selectedCount}_stores_${new Date().getTime()}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // Initialize
+        initMap();
+        fetchSupermarkets();
+    </script>
+</body>
+</html>
