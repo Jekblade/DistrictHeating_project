@@ -1,4 +1,4 @@
-the laid,from_node,to_node,length,hp_type,capacity,direction,costs,losses
+id,from_node,to_node,length,hp_type,capacity,direction,costs,losses
 0,forks-3,consumers-0,295.9,DN80,908.669134,1,1966991.5923229847,3.1791344523996417
 1,forks-3,producers-1,804.8,,0.0,0,0.0,0.0
 2,producers-1,forks-0,366.63,DN80,1236.617327,1,2522844.346578792,4.368295207834896
